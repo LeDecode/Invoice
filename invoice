@@ -1,0 +1,127 @@
+from num2words import num2words
+import requests
+import bs4
+import re
+from calendar import mdays
+from datetime import datetime, timedelta
+import os.path
+from htmldocx import HtmlToDocx
+
+
+url_adresas = "https://rekvizitai.vz.lt/imone/"
+suma = 1000.00
+kokia_veikla = "Scenos pastatymas"
+
+
+tikriname = True
+saskaitos_numeris = 1
+while tikriname != False:
+    failo_pavadinimas = "{}.html"
+    serija_ir_numeris = f"SF_{saskaitos_numeris}"
+    tikriname = os.path.isfile(failo_pavadinimas.format(serija_ir_numeris))
+    saskaitos_numeris += 1
+
+
+
+zodis = num2words(suma, to="currency", lang="lt")
+today = datetime.now()
+next_month_of_today = today + timedelta(mdays[today.month])
+siandien = f'{today.strftime("%Y")}-{today.strftime("%m")}-{today.strftime("%d")}'
+kitas_menuo = f'{next_month_of_today.strftime("%Y")}-{next_month_of_today.strftime("%m")}-{next_month_of_today.strftime("%d")}'
+
+
+class Rekvizitai():
+    def __init__(self, url_address):
+        self.url_address = url_address
+        self.result = requests.get(self.url_address)
+        self.soup = bs4.BeautifulSoup(self.result.text,"lxml")
+        self.all_elements = self.soup.select("td")
+    def imones_pavadinimas(self):
+        imones_pavadinimas = self.soup.select("h1")
+        return imones_pavadinimas[0].getText()
+    def imones_vadovas(self):
+        i = 0
+        for x in self.all_elements:
+            i = i + 1
+            zodis = x.getText()
+            if zodis == "Vadovas":
+                vadovas = self.all_elements[i].getText()
+                regex = re.compile(r'[\n\r\t]')
+                vadovas = regex.sub("", vadovas)
+                return vadovas
+            else:
+                pass
+    def imones_adresas(self):
+        i = 0
+        for x in self.all_elements:
+            i = i + 1
+            zodis = x.getText()
+            if zodis == "Adresas":
+                return self.all_elements[i].getText()
+            else:
+                pass
+    def imones_kodas(self):
+        i = 0
+        for x in self.all_elements:
+            i = i + 1
+            zodis = x.getText()
+            if zodis == "Įmonės kodas":
+                return self.all_elements[i].getText()
+            else:
+                pass
+    def pvm_moketojo_kodas(self):
+        i = 0
+        for x in self.all_elements:
+            i = i + 1
+            zodis = x.getText()
+            if zodis == "PVM mokėtojo kodas":
+                return self.all_elements[i].getText()
+
+
+rekvizitai = Rekvizitai(url_adresas)
+
+atidaryti_html_faila = open("Saskaita.html", "r", encoding="1257")
+sena_saskaita = atidaryti_html_faila.readlines()
+atidaryti_html_faila.close()
+
+i = -1
+for n in sena_saskaita:
+    i+=1
+    if n == '<p class="western" align="center">Serija ir Nr. SF_00</p>\n':
+        sena_saskaita[i] = f'<p class="western" align="center">Serija ir Nr. {serija_ir_numeris}</p>\n'
+    if n == 'siandienosdata</span></p>\n':
+        sena_saskaita[i] = f'{siandien}</span></p>\n'
+    if n == '<p class="western" align="center">Apmokėti iki: <span lang="en-US">kitomenesiodata</span></p>\n':
+        sena_saskaita[i] = f'<p class="western" align="center">Apmokėti iki: <span lang="en-US">{kitas_menuo}</span></p>\n'
+    if n == '\t\t\t<p class="western">Integrali integraline integrale</p>\n':
+        sena_saskaita[i] = f'\t\t\t<p class="western">{rekvizitai.imones_pavadinimas()}</p>\n'
+    if n == '\t\t\t<p class="western">Įmonės kodas: 300000000</p>\n':
+        sena_saskaita[i] = f'\t\t\t<p class="western">Įmonės kodas: {rekvizitai.imones_kodas()}</p>\n'
+    if n == '\t\t\t<p class="western">Vadovas: Nikolajus Nikalojovicius</p>\n':
+        sena_saskaita[i] = f'\t\t\t<p class="western">Vadovas: {rekvizitai.imones_vadovas()}</p>\n'
+    if n == '\t\t\t<p class="western">Adresas: A. Juozuko g. 10A-1110, LT-09090</p>\n':
+        sena_saskaita[i] = f'\t\t\t<p class="western">Adresas: {rekvizitai.imones_adresas()}</p>\n'
+    if n == '\t\t\t<p class="western">PVM mokėtojo kodas: LT100000000000</p>\n':
+        sena_saskaita[i] = f'\t\t\t<p class="western">PVM mokėtojo kodas: {rekvizitai.pvm_moketojo_kodas()}</p>\n'
+    if n == '\t\t\tFotografavimo veikla \n':
+        sena_saskaita[i] = f'\t\t\t{kokia_veikla} \n'
+    if n == '\t\t\t125 &euro;</p>\n':
+        sena_saskaita[i] = f'\t\t\t{suma} &euro;</p>\n'
+    if n == '<p class="western" align="right"><b>Bendra suma 125 &euro;</b></p>\n':
+        sena_saskaita[i] = f'<p class="western" align="right"><b>Bendra suma {suma} &euro;</b></p>\n'
+    if n == '<p class="western">Suma žodžiais: simtas &euro; 0 ct</p>\n':
+        sena_saskaita[i] = f'<p class="western">Suma žodžiais: {zodis}</p>\n'
+    if n == '<p class="western">Sąskaitą i&scaron;ra&scaron;ė: Paulius Varonenka</p>\n':
+        sena_saskaita[i] = '<p class="western">Sąskaitą išrašė: Paulius Varonenka</p>\n'
+
+
+failo_pavadinimas = "{}.html"
+nauja_saskaita = open(failo_pavadinimas.format(serija_ir_numeris), mode="a", encoding="1257")
+nauja_saskaita.writelines(sena_saskaita)
+nauja_saskaita.close()
+
+dokumento_pavadinimas = "{}"
+new_parser = HtmlToDocx()
+new_parser.parse_html_file(failo_pavadinimas.format(serija_ir_numeris), dokumento_pavadinimas.format(serija_ir_numeris))
+
+
